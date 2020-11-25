@@ -2,12 +2,15 @@ import argparse
 import logging
 import hashlib
 import re
+import nltk
 from urllib.parse import urlparse
+from nltk.corpus import stopwords
 
 import pandas as pd
 logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
+stop_words = set(stopwords.words('spanish'))
 
 def main(filename):
     logger.info('Starting cleaning process')
@@ -15,7 +18,7 @@ def main(filename):
     df = _read_data(filename)
     # Extraer el newspaper_uid del archivo por medio del nombre del mismo
     # Recordar que el nombre del csv empieza con el nombre del newspaper
-    newspaper_uid = _extract_newspaper_uid(filename)
+    newspaper_uid = extract_newspaper_uid(filename)
     # Agregar la columna newspaper_uid al DataFrame
     df = _add_newspaper_uid_column(df, newspaper_uid)
     # Extraer el host del DataFrame
@@ -28,8 +31,36 @@ def main(filename):
 
     # Limpiar el Body
     df = _remove_trash_from_body(df)
+
+    # Tokenizar Title
+    df = _tokenize_column(df, 'title')
+    # Tokenizar Body
+    df = _tokenize_column(df, 'body')
     return df
+
+def _tokenize_column(df, column_name):
+    logger.info('Starting tokenizing process')
+    tokenizing_serie = _tokenizing_words(df, column_name)
     
+    df['n_tokens_{}'.format(column_name)] = tokenizing_serie
+    return df
+
+def _tokenizing_words(df, column_name):
+    return (df
+            #Eliminar cualquier Na
+           .dropna()
+            #Tokenizar la columna o serie
+           .apply(lambda row: nltk.word_tokenize(row[column_name]), axis=1)
+            #Eliminar todas aquellas palabras no Alphanumericas
+           .apply(lambda tokens: list(filter(lambda token: token.isalpha(), tokens)))
+            #Convertir los tokens en lowercase
+           .apply(lambda tokens: list(map(lambda token: token.lower(), tokens)))
+            #Eliminar stopwords
+           .apply(lambda word_list: list(filter(lambda word: word not in stop_words, word_list)))
+            #Obtener el length de la lista de palabras
+           .apply(lambda valid_word_list: len(valid_word_list))
+          )    
+
 def _remove_trash_from_body(df):
     logger.info('Remove trashes characteres from body')
     # Eliminar Saltos de linea y markdown del BODY en el DATAFRAME
@@ -90,7 +121,7 @@ def _read_data(filename):
     return pd.read_csv(filename)
 
 # Extraer el newspaper_uid del archivo por medio del nombre del mismo
-def _extract_newspaper_uid(filename):
+def extract_newspaper_uid(filename):
     logger.info('Extrating newspaper uid')
     # Seleccionar la primera parte del string que esté dividido por el caracter '_'
     newspaper_uid = filename.split('_')[0]
@@ -106,3 +137,6 @@ if __name__ == '__main__':
     df = main(args.filename)
     print(df)
     # print(df.iloc[66]['title'])
+    newspaper_uid = extract_newspaper_uid(args.filename)
+    # Para grabar el DataFrame en csv se usa la siguiente línea de código,
+    df.to_csv('{}_limpio.csv'.format(newspaper_uid), encoding="utf-8")
