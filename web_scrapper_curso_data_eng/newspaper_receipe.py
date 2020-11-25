@@ -1,5 +1,7 @@
 import argparse
 import logging
+import hashlib
+import re
 from urllib.parse import urlparse
 
 import pandas as pd
@@ -20,7 +22,38 @@ def main(filename):
     df = _extract_host(df)
     # Llenar los titulos faltantes
     df = _fill_missing_titles(df)
+
+    # Generar Serie UID
+    df = _generate_uids_for_rows(df)
+
+    # Limpiar el Body
+    df = _remove_trash_from_body(df)
     return df
+    
+def _remove_trash_from_body(df):
+    logger.info('Remove trashes characteres from body')
+    # Eliminar Saltos de linea y markdown del BODY en el DATAFRAME
+    stripped_boddy = (df
+                    .apply(lambda row: row['body'], axis=1)
+                    .apply(lambda body: re.sub(r'(\n|\r)+',r'', body))
+    #                   .apply(lambda body: body.replace('\n',''))
+    #                   .apply(lambda body: body.replace('\r',''))
+                        )
+    df['body'] = stripped_boddy
+    return df
+def _generate_uids_for_rows(df):
+    logger.info('Generating uids for each row')
+    # Generar un hash de la url para hacerla un id unico 
+    #axis=1 row, axis=0 column
+    # hash_object es lo que nos arroja el primer apply
+    uids = (df
+            .apply(lambda row: hashlib.md5(bytes(row['url'].encode())),axis=1)
+            .apply(lambda hash_object: hash_object.hexdigest())
+            )
+    df['uid'] = uids
+    # set_index = Definir la column indice
+    # inplace=True Modificar directamente nuestro DataFrame (no generar uno nuevo)
+    return df.set_index('uid', inplace=False)
     
     # Rellenar datos faltantes
 def _fill_missing_titles(df):
