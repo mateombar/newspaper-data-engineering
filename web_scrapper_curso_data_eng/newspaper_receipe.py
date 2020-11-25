@@ -18,9 +18,28 @@ def main(filename):
     df = _add_newspaper_uid_column(df, newspaper_uid)
     # Extraer el host del DataFrame
     df = _extract_host(df)
-
+    # Llenar los titulos faltantes
+    df = _fill_missing_titles(df)
     return df
     
+    # Rellenar datos faltantes
+def _fill_missing_titles(df):
+    logger.info('Filling mising titles')
+    # Genera una serie con datos faltantes y sus indices
+    missing_titles_mask = df['title'].isna()
+    # Generando nueva serie creando una nueva columna en el_tiempo y
+    # como dato la url parseada para que no tenga lineas y sea solamente la parte final de la url 
+    # ?P<missing_titles> nombre grupo que recorre toda la url hasta el ultimo /, y que solo toma del ultimo / hasta el final 
+    # applymap genera un dato de un valor a otro, es decir una trasnformacion
+    missing_titles = (df[missing_titles_mask]['url']
+                    .str.extract(r'(?P<missing_titles>[^/]+)$')
+                    .applymap(lambda title: title.replace('-',' '))
+                    )
+    # Asignar a una columna
+    # Todas las filas de la Serie missing_titles_mask llenarlas con las filas de la Series missing_titles
+    df.loc[missing_titles_mask, 'title'] = missing_titles.loc[:, 'missing_titles']
+    return df                  
+
 def _extract_host(df):
     logger.info('Extrating host from urls')
     # Obtener el host de las urls mediande apply y la libreria urllib con el metodo netloc
@@ -53,3 +72,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
     df = main(args.filename)
     print(df)
+    # print(df.iloc[66]['title'])
